@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+
+  # rabbit:
+  #   hostname: rabbit
+  #   container_name: api_service_rabbit
+  #   image: rabbitmq:latest
+  #   environment:
+  #   - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+  #   - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+
+  api:
+    image: api_service:1.0
+    container_name: api-service
+    depends_on:
+      - mongodb
+    links:
+      - mongodb
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - MONGODB_ADMINUSERNAME=${MONGODB_ADMINUSERNAME}
+      - MONGODB_ADMINPASSWORD=${MONGODB_ADMINPASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+      - DJANGO_ADMIN_USER=${DJANGO_ADMIN_USER}
+      - DJANGO_ADMIN_PASS=${DJANGO_ADMIN_PASS} 
+    command: ["sh", "-c", "python manage.py makemigrations && python manage.py migrate && python manage.py createsuperuserwithpassword --username $DJANGO_ADMIN_USER --password $DJANGO_ADMIN_PASS --email user.test@user.com --preserve && python manage.py runserver 0.0.0.0:8000"]
+    ports:
+      - 8000:8000
+      - 3000:3000
+    volumes:
+    - ./../../../api_service/:/usr/src/app/
+    networks:
+    - mongodb-network
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    environment:
+    - MONGO_INITDB_ROOT_USERNAME=${MONGODB_ADMINUSERNAME}
+    - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_ADMINPASSWORD}
+    - MONGO_INITDB_USERNAME=${MONGO_INITDB_USERNAME}
+    - MONGO_INITDB_PASSWORD=${MONGO_INITDB_PASSWORD}
+    - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+    volumes:
+    - mongodb-data:/data/db
+    networks:
+    - mongodb-network
+    ports:
+    - 27017:27017
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongo-express
+    environment:
+    - ME_CONFIG_MONGODB_SERVER=${MONGODB_SERVER}
+    - ME_CONFIG_MONGODB_ENABLE_ADMIN=${MONGODB_ENABLE_ADMIN}
+    - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGODB_ADMINUSERNAME}
+    - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGODB_ADMINPASSWORD}
+    - ME_CONFIG_BASICAUTH_USERNAME=${BASICAUTH_USERNAME}
+    - ME_CONFIG_BASICAUTH_PASSWORD=${BASICAUTH_PASSWORD}
+    volumes:
+    - mongodb-data
+    depends_on:
+    - mongodb
+    networks:
+    - mongodb-network
+    ports:
+    - 8081:8081
+    healthcheck:
+      test:  wget --quiet --tries=3 --spider http://${BASICAUTH_USERNAME}:${BASICAUTH_PASSWORD}@localhost:8081 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  mongodb-data:
+    name: mongodb-data
+networks:
+  mongodb-network:
+    name: mongodb-network

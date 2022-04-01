@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+
+  api:
+    image: stock_service:1.0
+    container_name: stock-service
+    command: ["sh", "-c", "python manage.py runserver 0.0.0.0:7000"]
+    ports:
+      - 7000:7000
+      - 2000:2000
+    volumes:
+    - ./../../../stock_service:/usr/src/app/
+    restart: unless-stopped
+
+networks:
+  default:
+    external:
+      name: mongodb-network
